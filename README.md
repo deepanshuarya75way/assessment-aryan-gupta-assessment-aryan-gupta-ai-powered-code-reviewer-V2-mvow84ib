@@ -15,6 +15,8 @@ Key capabilities likely include:
 - Inngest event handling
 - Pinecone-powered search or vector embeddings
 
+// ngrok http --url=unpreserved-elke-unrefractory.ngrok-free.dev 3000
+
 ## Tech stack
 
 - Next.js 16.2.9

@@ -1,5 +1,6 @@
 import type { PullRequestStatus } from "@/features/dashboard/lib/types";
 import { prisma } from "@/lib/db";
+import {toWhere, type Group} from "../lib/filters";
 import type {
   PullRequestDetail,
   PullRequestFilter,
@@ -76,9 +77,10 @@ export function emptyPullRequestPage(page = 1): PullRequestPage {
  */
 export async function listPullRequests(
   installationId: number,
-  options: { filter: PullRequestFilter; search: string; page: number },
+  options: { filter: PullRequestFilter; search: string; page: number; advanced?: Group | null; },
 ): Promise<PullRequestPage> {
-  const { filter, search, page } = options;
+  const { filter, search, page, advanced } = options;
+  const advancedWhere = advanced ? toWhere(advanced): null;
 
   const searchWhere = search
     ? {
@@ -89,7 +91,7 @@ export async function listPullRequests(
       }
     : {};
 
-  const baseWhere = { installationId, ...searchWhere };
+  const baseWhere = { installationId, ...searchWhere, ...(advancedWhere ? {AND: [advancedWhere]} : {}) };
   const statuses = FILTER_STATUSES[filter];
   const filteredWhere = statuses
     ? { ...baseWhere, status: { in: statuses } }

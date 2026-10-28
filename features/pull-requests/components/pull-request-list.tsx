@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight, Filter, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,11 +23,14 @@ import {
   PR_STATUS_TONE,
   statusBadge,
 } from "@/features/dashboard/lib/status-style";
+import {validate, type Group} from "../lib/filters";
+import {GroupEditor} from "./filter-editor";
 import type {
   PullRequestFilter,
   PullRequestListItem,
   PullRequestPage,
 } from "../types";
+import { OutletBoundary } from "next/dist/lib/framework/boundary-components";
 
 /** Matches the overview page so the dashboard feels consistent. */
 const POLL_INTERVAL = 10_000;
@@ -50,6 +53,10 @@ export function PullRequestList() {
   const [filter, setFilter] = useState<PullRequestFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [draft, setDraft] = useState<Group>({logic: "and", items: []});
+  const [applied, setApplied] = useState<Group | null>(null);
+  const appliedJson = applied ? JSON.stringify(applied) : "";
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE);
@@ -63,8 +70,9 @@ export function PullRequestList() {
     isFetchingNextPage,
     isPending,
     isError,
+    error,
   } = useInfiniteQuery({
-    queryKey: ["pull-requests", "list", filter, debouncedSearch],
+    queryKey: ["pull-requests", "list", filter, debouncedSearch, appliedJson],
     queryFn: async ({ pageParam }): Promise<PullRequestPage> => {
       const params = new URLSearchParams({
         filter,
@@ -75,10 +83,15 @@ export function PullRequestList() {
         params.set("search", debouncedSearch);
       }
 
+      if(appliedJson) {
+        params.set("filters", appliedJson);
+      }
+
       const response = await fetch(`/api/pull-requests?${params}`);
 
       if (!response.ok) {
-        throw new Error("Failed to load pull requests");
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? "Failed to load pull requests");
       }
 
       return response.json();
@@ -115,7 +128,7 @@ export function PullRequestList() {
     rows = (
       <TableRow>
         <TableCell colSpan={6} className="text-center text-muted-foreground">
-          Failed to load pull requests.
+          {error instanceof Error ? error.message : "Failed to load pull requests."}
         </TableCell>
       </TableRow>
     );
@@ -123,7 +136,9 @@ export function PullRequestList() {
     rows = (
       <TableRow>
         <TableCell colSpan={6} className="text-center text-muted-foreground">
-          {debouncedSearch
+          {applied
+          ? "No results. Your filters may conflict"
+          : debouncedSearch
             ? "No pull requests match that search."
             : "No pull requests yet. Open one on a connected repository."}
         </TableCell>
@@ -150,13 +165,28 @@ export function PullRequestList() {
             ))}
           </TabsList>
         </Tabs>
-        <Input
-          placeholder="Search by repo or title…"
-          className="max-w-xs"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowFilters((o) => !o)}>
+            <Filter className="size-4" /> Filters{applied ? " (on)" : ""}
+          </Button>
+          <Input
+            placeholder="Search by repo or title…"
+            className="max-w-xs"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
       </div>
+
+      {showFilters && (
+        <div className="flex flex-col gap-3 border border-border p-4">
+          <GroupEditor value={draft} onChange={setDraft}/>
+          <div className="flex items-center gap-2">
+            <Button size="sm" disabled={!!validate(draft)} onClick={() => setApplied(draft.items.length ? draft : null)}>Apply</Button>
+            <Button size="sm" variant="outline" onClick={() => {setDraft({logic: "and", items: []}); setApplied(null);}}>Clear</Button>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-none border border-border">
         <Table>

@@ -1,3 +1,4 @@
+import {validate, type Group} from "@/features/pull-requests/lib/filters"
 import { NextResponse } from "next/server";
 
 import { getServerSession } from "@/features/auth/actions";
@@ -26,6 +27,14 @@ export async function GET(request: Request) {
 
   const installationId = await getUserInstallationId(session.user.id);
 
+  if(raw) {
+    try {
+      advanced = JSON.parse(raw);
+    } catch {}
+    const error = !advanced || raw.length > 8000 ? "Invalid filter" : validate(advanced);
+    if(error) return NextResponse.json({error}, {status: 400});
+  }
+
   if (!installationId) {
     return NextResponse.json(emptyPullRequestPage(page));
   }
@@ -34,6 +43,7 @@ export async function GET(request: Request) {
     filter,
     search,
     page,
+    advanced,
   });
 
   return NextResponse.json(data);
